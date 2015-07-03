@@ -1,0 +1,14 @@
+## Interface: 60200
+## Title: Target and Crowd Control Assistant
+## Notes: Very early initial version.
+## Version: 1.0
+## SavedVariables: TCCAUserConfig
+LibStub\LibStub.lua
+CallbackHandler-1.0\CallbackHandler-1.0.xml
+LibNameplate-1.0\lib.xml
+
+InitialSetup.lua
+Client.lua
+Communication.lua
+Host.lua
+EndSetup.lua
