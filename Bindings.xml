@@ -1,5 +1,5 @@
 <Bindings>
-    <Binding name="ASSIGN_TARGET" header="TCCA" category="ADDONS">
-        TCCA.localSetTarget()
+    <Binding name="ASSIGN_LOCAL_TARGET" header="TCCA" category="ADDONS">
+        TCCA.setLocalTarget()
     </Binding>
 </Bindings>

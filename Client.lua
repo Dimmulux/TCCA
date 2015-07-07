@@ -1,7 +1,6 @@
 local NOKILLTARGETASSIGNED = "No kill target assigned."
 local assignedFrame
 
--- Adapted from l2target --
 function TCCA.setupTargetMarker()
     local LibNameplate = LibStub("LibNameplate-1.0", true)
 	
@@ -13,14 +12,15 @@ function TCCA.setupTargetMarker()
 	local function updateTargetMarker()
 		if TCCA.assignedKillTarget then
             local assignedTargetNamePlate
-            local assignedKillTargetCharName = TCCA.assignedKillTarget:match("^(%a*)-")
-            if assignedKillTargetCharName then
-                --guess not on connected realm
-                assignedTargetNamePlate = LibNameplate:GetNameplateByName(assignedKillTargetCharName .. " (*)")
-                --in case of being on connected realm
+            local assignedKillTargetCharName, assignedKillTargetRealm = TCCA.assignedKillTarget:match("^(%a+)%-(%a*)")
+            if assignedKillTargetRealm and TCCA.connectedRealms[assignedKillTargetRealm] then
+				--on connected realm
                 assignedTargetNamePlate = assignedTargetNamePlate or LibNameplate:GetNameplateByName(assignedKillTargetCharName)
+			elseif assignedKillTargetRealm then
+                --not on connected realm
+                assignedTargetNamePlate = LibNameplate:GetNameplateByName(assignedKillTargetCharName .. " (*)")
             else
-                -- target certainly on player character's home realm or an NPC as no '-' in local name
+                -- target on player character's home realm or an NPC as no '-' in local name
                 assignedTargetNamePlate = LibNameplate:GetNameplateByName(TCCA.assignedKillTarget)
             end
             if assignedTargetNamePlate then
@@ -166,6 +166,12 @@ function TCCA.printTarget()
 end
 
 function TCCA.targetChanged(newTarget)
+	if TCCA.assignedKillTarget == newTarget then
+        return
+	end
+	if TCCA.assignedKillTarget then
+		TCCA.switchedAwayFromTime[TCCA.assignedKillTarget] = TCCA.latestTimestamp
+	end
     TCCA.assignedKillTarget = newTarget
     local tA = TCCAUserConfig.targetAssistance
     if tA.chatText then
@@ -174,23 +180,64 @@ function TCCA.targetChanged(newTarget)
     if tA.frameText then
         assignedFrame.text:SetText(newTarget or NOKILLTARGETASSIGNED)
     end
-    if tA.wrongTargetSound then
-    end
     if tA.assignedSwitchSound then
-        PlaySoundFile(TCCAUserConfig.assignedSwitchSoundEffect)
+        PlaySoundFile(TCCAUserConfig.targetAssistance.assignedSwitchSoundEffect)
     end
 end
 
-function TCCA.setLocalTarget()
-    local newTarget = GetUnitName("target", true)
-    if newTarget ~= TCCA.assignedKillTarget then
-        TCCA.targetChanged(newTarget)
-    end
+function TCCA.setLocalTarget(newTarget)
+    newTarget = newTarget or GetUnitName("target", true)
+    TCCA.targetChanged(newTarget)
     return newTarget
 end
 
-function TCCA.clearLocalTarget()
-    if TCCA.assignedKillTarget then
-        TCCA.targetChanged(nil)
-    end
+do
+	local directDamage = {
+		SWING_DAMAGE = true,
+		RANGE_DAMAGE = true,
+		SPELL_DAMAGE = true,
+		SWING_MISSED = true,
+		RANGE_MISSED = true,
+		SPELL_MISSED = true,
+	}	
+	function TCCA.wrongTargetSound(timeStamp, event, _, _, sourceName, _, _, _, destName)
+		if TCCA.assignedKillTarget and sourceName == TCCA.playerName and destName ~= TCCA.assignedKillTarget 
+		 and directDamage[event] and (not TCCA.switchedAwayFromTime[destName] 
+		  or timeStamp > TCCA.switchedAwayFromTime[destName] + TCCAUserConfig.targetAsssistance.switchSecondsGrace) then
+			PlaySoundFile(TCCAUserConfig.targetAssistance.wrongTargetSoundEffect)
+		end	
+	end
+	function TCCA.attackStatisticsUpdate(timeStamp, event, _, _, sourceName, _, _, _, destName)
+		if TCCA.assignedKillTarget and directDamage[event] then
+			local _, maxRange = TCCA.rangeChecker:GetRange(destName)
+			if true --[[maxRange and maxRange <= 50]] then
+				if destName == TCCA.assignedKillTarget then
+					TCCA.attacksOnCorrectTargetBy[sourceName] = (TCCA.attacksOnCorrectTargetBy[sourceName] or 0) + 1
+				else
+					TCCA.attacksOnWrongTargetBy[sourceName] = (TCCA.attacksOnWrongTargetBy[sourceName] or 0) + 1
+				end
+			end
+		end
+	end
 end
+
+function TCCA.printGroupMembersWithTCCA()
+	local message = "Group members with TCCA: "
+	--inefficient concatenation
+	for name in pairs(TCCA.groupMembersWithTCCA) do
+		message = message .. name .. ", " 
+	end
+	print(message)
+end 
+function TCCA.printGroupMembersWithoutTCCA()
+	local message = "Group members without TCCA: "
+	local withTCCA = TCCA.groupMembersWithTCCA
+	--inefficient concatenation
+	for name in pairs(TCCA.groupMembers) do
+		if not withTCCA[name] then
+			message = message .. name .. ", "
+		end
+	end
+	print(message)
+end 
+
